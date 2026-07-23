@@ -73,27 +73,33 @@ describe('Test the viewer page', { tags: '@critical' }, () => {
                 cy.getByTestId('submodel-dropdown-button').contains('show', { matchCase: false }).as('dropdown');
                 cy.get('@dropdown').click();
 
+                // data-row-title and the value's testid (property-content/mlproperty-content)
+                // are siblings under the same DataRow container, not ancestor/descendant, so we
+                // go up to that shared parent before searching back down for the value.
                 cy.getByTestId('data-row-title')
                     .contains(testData.propertyNoUrl, { matchCase: false })
+                    .parent()
                     .findByTestId('property-content')
                     .contains(testData.testNoUrl)
                     .should('not.have.attr', 'href');
 
                 cy.getByTestId('data-row-title')
                     .contains(testData.propertyUrl, { matchCase: false })
+                    .parent()
                     .findByTestId('property-content')
                     .contains(testData.testUrl)
                     .should('have.attr', 'href');
 
                 cy.getByTestId('data-row-title')
                     .contains(testData.mlpropertyUrl, { matchCase: false })
+                    .parent()
                     .findByTestId('mlproperty-content')
                     .contains(testData.testUrl)
-                    .find('a')
                     .should('have.attr', 'href');
 
                 cy.getByTestId('data-row-title')
                     .contains(testData.mlpropertyNoUrl, { matchCase: false })
+                    .parent()
                     .findByTestId('mlproperty-content')
                     .contains(testData.testNoUrl)
                     .should('not.have.attr', 'href');

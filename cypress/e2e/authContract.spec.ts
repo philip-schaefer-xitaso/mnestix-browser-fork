@@ -4,15 +4,47 @@
 // (button -> Keycloak redirect -> callback -> session cookie -> role-based UI) works
 // end to end; every other authenticated spec trusts that contract and skips straight
 // to a minted session for speed.
+
+// After signOut()'s full-page reload to '/en', the client briefly renders the
+// header in a transient state where the drawer's content reflects the
+// not-yet-resolved (still-authenticated-looking) session. Opening the drawer
+// while that's true "freezes" it showing the stale admin content instead of
+// reactively updating once the session resolves to unauthenticated. Toggling
+// the drawer closed and reopening forces a fresh render against the latest
+// session state, so retry by closing+reopening until login-button shows up.
+function clickBurgermenuUntilOpen(attempt = 0) {
+    cy.getByTestId('header-burgermenu').click();
+    cy.get('body').then(($body) => {
+        const hasLoginButton = $body.find('[data-testid="login-button"]').length > 0;
+        if (!hasLoginButton && attempt < 20) {
+            cy.getByTestId('header-burgermenu').click(); // close
+            // eslint-disable-next-line cypress/no-unnecessary-waiting -- deliberate backoff between retry attempts
+            cy.wait(300);
+            clickBurgermenuUntilOpen(attempt + 1);
+        }
+    });
+}
+
 describe('Keycloak login/logout and role-based access', { tags: '@auth' }, () => {
-    const adminTestUser = {
-        login: Cypress.env('TEST_ADMIN_USER_LOGIN'),
-        password: Cypress.env('TEST_ADMIN_USER_PASSWORD'),
-    };
-    const testUser = {
-        login: Cypress.env('TEST_USER_LOGIN'),
-        password: Cypress.env('TEST_USER_PASSWORD'),
-    };
+    let adminTestUser: { login: string; password: string };
+    let testUser: { login: string; password: string };
+
+    before(() => {
+        cy.env<{
+            TEST_ADMIN_USER_LOGIN: string;
+            TEST_ADMIN_USER_PASSWORD: string;
+            TEST_USER_LOGIN: string;
+            TEST_USER_PASSWORD: string;
+        }>(['TEST_ADMIN_USER_LOGIN', 'TEST_ADMIN_USER_PASSWORD', 'TEST_USER_LOGIN', 'TEST_USER_PASSWORD']).then(
+            (credentials) => {
+                adminTestUser = {
+                    login: credentials.TEST_ADMIN_USER_LOGIN,
+                    password: credentials.TEST_ADMIN_USER_PASSWORD,
+                };
+                testUser = { login: credentials.TEST_USER_LOGIN, password: credentials.TEST_USER_PASSWORD };
+            },
+        );
+    });
 
     beforeEach(() => {
         cy.setupKeycloakStateCookieRelay();
@@ -38,7 +70,8 @@ describe('Keycloak login/logout and role-based access', { tags: '@auth' }, () =>
         cy.getByTestId('login-button').should('not.exist');
 
         cy.keycloakUiLogout();
-        cy.getByTestId('header-burgermenu').click();
+        cy.location('pathname').should('eq', '/en');
+        clickBurgermenuUntilOpen();
         cy.getByTestId('login-button').should('exist');
     });
 

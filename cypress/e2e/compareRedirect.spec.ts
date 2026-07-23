@@ -7,7 +7,10 @@
 describe('Compare route redirect', { tags: '@critical' }, () => {
     it('redirects /compare to the home page', () => {
         cy.visit('/compare');
-        cy.url().should('eq', Cypress.config().baseUrl);
+        // next-intl's routing.ts has no localePrefix override, which defaults to 'always',
+        // so the home page always resolves under the default locale (/en), not the bare
+        // baseUrl.
+        cy.url().should('eq', `${Cypress.config().baseUrl}en`);
         cy.getByTestId('welcome-text').should('be.visible');
     });
 });

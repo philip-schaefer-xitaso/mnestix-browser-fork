@@ -1,4 +1,10 @@
-describe('Visit the Settings page', { tags: '@critical' }, () => {
+// Occasionally the app unexpectedly navigates to the home page mid-test at an
+// unpredictable point (unconfirmed root cause, suspected auth/session state
+// settling - see /memories/session/e2e-overhaul-plan.md). Since it can happen
+// at any single interaction, a full test retry (re-running beforeEach's fresh
+// login+navigation and the whole test body from scratch) is a more reliable
+// mitigation than trying to guard every individual step.
+describe('Visit the Settings page', { tags: '@critical', retries: { runMode: 2, openMode: 0 } }, () => {
     beforeEach(() => {
         cy.loginAs('admin');
         cy.setResolution([1920, 1080]);

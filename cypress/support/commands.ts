@@ -24,35 +24,39 @@ Cypress.Commands.add('visitViewer', (aasId) => {
 });
 
 Cypress.Commands.add('getByTestId', (dataTestId, option?) => {
-    cy.get('[data-testid=' + dataTestId + ']', option);
+    cy.get(`[data-testid="${dataTestId}"]`, option);
 });
 
 Cypress.Commands.add('findByTestId', { prevSubject: true }, (subject, dataTestId) => {
-    return cy.wrap(subject).find('[data-testid=' + dataTestId + ']');
+    return cy.wrap(subject).find(`[data-testid="${dataTestId}"]`);
 });
 
 Cypress.Commands.add('repoRequest', (requestMethod, urlPath, requestBody) => {
-    cy.request({
-        method: requestMethod,
-        url: `${Cypress.env('AAS_REPO_API_URL')}${urlPath}`,
-        headers: {
-            'X-API-KEY': Cypress.env('MNESTIX_API_KEY'),
-        },
-        body: requestBody,
-        failOnStatusCode: false,
+    return cy.env<{ MNESTIX_API_KEY: string }>(['MNESTIX_API_KEY']).then(({ MNESTIX_API_KEY }) => {
+        return cy.request({
+            method: requestMethod,
+            url: `${Cypress.expose('AAS_REPO_API_URL')}${urlPath}`,
+            headers: {
+                'X-API-KEY': MNESTIX_API_KEY,
+            },
+            body: requestBody,
+            failOnStatusCode: false,
+        });
     });
 });
 
 Cypress.Commands.add('registryRequest', (requestMethod, urlPath) => {
     // The integrated BaSyx registry is exposed through the proxy under /registry,
     // next to the /repo path used by repoRequest.
-    cy.request({
-        method: requestMethod,
-        url: `${Cypress.env('AAS_REPO_API_URL').replace(/\/repo$/, '/registry')}${urlPath}`,
-        headers: {
-            'X-API-KEY': Cypress.env('MNESTIX_API_KEY'),
-        },
-        failOnStatusCode: false,
+    return cy.env<{ MNESTIX_API_KEY: string }>(['MNESTIX_API_KEY']).then(({ MNESTIX_API_KEY }) => {
+        return cy.request({
+            method: requestMethod,
+            url: `${(Cypress.expose('AAS_REPO_API_URL') as string).replace(/\/repo$/, '/registry')}${urlPath}`,
+            headers: {
+                'X-API-KEY': MNESTIX_API_KEY,
+            },
+            failOnStatusCode: false,
+        });
     });
 });
 
@@ -63,30 +67,32 @@ Cypress.Commands.add('waitForRepoReady', () => {
     // silently, leaving specs to run against missing data. Poll the repository
     // until it answers successfully before any data is seeded.
     const maxAttempts = 60;
-    function attempt(attemptNumber: number) {
-        cy.request({
-            method: 'GET',
-            url: `${Cypress.env('AAS_REPO_API_URL')}/shells`,
-            headers: {
-                'X-API-KEY': Cypress.env('MNESTIX_API_KEY'),
-            },
-            failOnStatusCode: false,
-            timeout: 10000,
-        }).then((response) => {
-            if (response.status === 200) {
-                return;
-            }
-            if (attemptNumber >= maxAttempts) {
-                throw new Error(
-                    `AAS repository was not ready after ${maxAttempts} attempts (last status: ${response.status}).`,
-                );
-            }
-            // eslint-disable-next-line cypress/no-unnecessary-waiting -- deliberate backoff between readiness polls
-            cy.wait(1000);
-            attempt(attemptNumber + 1);
-        });
-    }
-    attempt(1);
+    cy.env<{ MNESTIX_API_KEY: string }>(['MNESTIX_API_KEY']).then(({ MNESTIX_API_KEY }) => {
+        function attempt(attemptNumber: number) {
+            cy.request({
+                method: 'GET',
+                url: `${Cypress.expose('AAS_REPO_API_URL')}/shells`,
+                headers: {
+                    'X-API-KEY': MNESTIX_API_KEY,
+                },
+                failOnStatusCode: false,
+                timeout: 10000,
+            }).then((response) => {
+                if (response.status === 200) {
+                    return;
+                }
+                if (attemptNumber >= maxAttempts) {
+                    throw new Error(
+                        `AAS repository was not ready after ${maxAttempts} attempts (last status: ${response.status}).`,
+                    );
+                }
+                // eslint-disable-next-line cypress/no-unnecessary-waiting -- deliberate backoff between readiness polls
+                cy.wait(1000);
+                attempt(attemptNumber + 1);
+            });
+        }
+        attempt(1);
+    });
 });
 
 Cypress.Commands.add('postSeed', (urlPath, body) => {
@@ -97,32 +103,34 @@ Cypress.Commands.add('postSeed', (urlPath, body) => {
     // resource still cannot be created, so a real problem fails fast instead of
     // running into minutes of timeouts against missing data.
     const maxAttempts = 30;
-    function attempt(attemptNumber: number) {
-        cy.request({
-            method: 'POST',
-            url: `${Cypress.env('AAS_REPO_API_URL')}${urlPath}`,
-            headers: {
-                'X-API-KEY': Cypress.env('MNESTIX_API_KEY'),
-            },
-            body,
-            failOnStatusCode: false,
-            timeout: 10000,
-        }).then((response) => {
-            // 2xx: created. 409: already exists, which is fine for idempotent seeding.
-            if ((response.status >= 200 && response.status < 300) || response.status === 409) {
-                return;
-            }
-            if (attemptNumber >= maxAttempts) {
-                throw new Error(
-                    `Seeding POST ${urlPath} failed after ${maxAttempts} attempts (last status: ${response.status}).`,
-                );
-            }
-            // eslint-disable-next-line cypress/no-unnecessary-waiting -- deliberate backoff between seeding retries
-            cy.wait(1000);
-            attempt(attemptNumber + 1);
-        });
-    }
-    attempt(1);
+    cy.env<{ MNESTIX_API_KEY: string }>(['MNESTIX_API_KEY']).then(({ MNESTIX_API_KEY }) => {
+        function attempt(attemptNumber: number) {
+            cy.request({
+                method: 'POST',
+                url: `${Cypress.expose('AAS_REPO_API_URL')}${urlPath}`,
+                headers: {
+                    'X-API-KEY': MNESTIX_API_KEY,
+                },
+                body,
+                failOnStatusCode: false,
+                timeout: 10000,
+            }).then((response) => {
+                // 2xx: created. 409: already exists, which is fine for idempotent seeding.
+                if ((response.status >= 200 && response.status < 300) || response.status === 409) {
+                    return;
+                }
+                if (attemptNumber >= maxAttempts) {
+                    throw new Error(
+                        `Seeding POST ${urlPath} failed after ${maxAttempts} attempts (last status: ${response.status}).`,
+                    );
+                }
+                // eslint-disable-next-line cypress/no-unnecessary-waiting -- deliberate backoff between seeding retries
+                cy.wait(1000);
+                attempt(attemptNumber + 1);
+            });
+        }
+        attempt(1);
+    });
 });
 
 Cypress.Commands.add('postShell', (aasBody) => {
@@ -270,24 +278,26 @@ Cypress.Commands.add('isNotificationSent', (msg: string) => {
     cy.get('.MuiAlert-message').should('contain.text', msg);
 });
 
-// NotificationOutlet.tsx renders `<Alert variant="filled" severity=.../>`, so MUI
-// generates a severity-specific class (MuiAlert-filledError / -filledSuccess / ...).
-// Asserting on that class - instead of the generic `.MuiAlert-root` the previous
-// suite used - fails fast and correctly on the wrong notification type, e.g. an
-// error banner shown where a save was expected to succeed.
+// NotificationOutlet.tsx renders `<Alert variant="filled" severity=.../>`. In MUI v9
+// this generates two separate classes - `MuiAlert-filled` and a color-specific
+// `MuiAlert-color<Severity>` (e.g. `MuiAlert-colorSuccess`) - NOT a combined
+// `MuiAlert-filledSuccess` class (that naming was true for older MUI major versions).
+// Asserting on both classes together - instead of the generic `.MuiAlert-root` the
+// previous suite used - fails fast and correctly on the wrong notification type, e.g.
+// an error banner shown where a save was expected to succeed.
 Cypress.Commands.add('expectSuccessNotification', (message?: string) => {
     if (message) {
-        cy.get('.MuiAlert-filledSuccess', { timeout: 10000 }).should('contain.text', message);
+        cy.get('.MuiAlert-filled.MuiAlert-colorSuccess', { timeout: 10000 }).should('contain.text', message);
     } else {
-        cy.get('.MuiAlert-filledSuccess', { timeout: 10000 }).should('be.visible');
+        cy.get('.MuiAlert-filled.MuiAlert-colorSuccess', { timeout: 10000 }).should('be.visible');
     }
 });
 
 Cypress.Commands.add('expectErrorNotification', (message?: string) => {
     if (message) {
-        cy.get('.MuiAlert-filledError', { timeout: 10000 }).should('contain.text', message);
+        cy.get('.MuiAlert-filled.MuiAlert-colorError', { timeout: 10000 }).should('contain.text', message);
     } else {
-        cy.get('.MuiAlert-filledError', { timeout: 10000 }).should('be.visible');
+        cy.get('.MuiAlert-filled.MuiAlert-colorError', { timeout: 10000 }).should('be.visible');
     }
 });
 
@@ -307,18 +317,20 @@ Cypress.Commands.add('uploadThumbnailToAas', (aasId: string) => {
         .then((file: Blob) => {
             const formData = new FormData();
             formData.append('file', file);
-            cy.request({
-                method: 'PUT',
-                url:
-                    `${Cypress.env('AAS_REPO_API_URL')}` +
-                    '/shells/' +
-                    encodedAasId +
-                    '/asset-information/thumbnail?fileName=test_thumbnail.png',
-                body: formData,
-                encoding: 'binary',
-                headers: {
-                    'X-API-KEY': Cypress.env('MNESTIX_API_KEY'),
-                },
+            return cy.env<{ MNESTIX_API_KEY: string }>(['MNESTIX_API_KEY']).then(({ MNESTIX_API_KEY }) => {
+                return cy.request({
+                    method: 'PUT',
+                    url:
+                        `${Cypress.expose('AAS_REPO_API_URL')}` +
+                        '/shells/' +
+                        encodedAasId +
+                        '/asset-information/thumbnail?fileName=test_thumbnail.png',
+                    body: formData,
+                    encoding: 'binary',
+                    headers: {
+                        'X-API-KEY': MNESTIX_API_KEY,
+                    },
+                });
             });
         });
 });
@@ -367,9 +379,7 @@ Cypress.Commands.add('setupKeycloakStateCookieRelay', () => {
             .map(([name, { value }]) => `${name}=${value}`)
             .join('; ');
         if (cookieHeader) {
-            req.headers['cookie'] = req.headers['cookie']
-                ? `${req.headers['cookie']}; ${cookieHeader}`
-                : cookieHeader;
+            req.headers['cookie'] = req.headers['cookie'] ? `${req.headers['cookie']}; ${cookieHeader}` : cookieHeader;
         }
         req.continue((res) => {
             captureSetCookies(res.headers['set-cookie'], ['next-auth.session-token']).forEach((cookie) => {
@@ -396,7 +406,7 @@ function captureSetCookies(
 Cypress.Commands.add('keycloakUiLogin', (login: string, password: string) => {
     cy.getByTestId('header-burgermenu').click();
     cy.getByTestId('login-button').click();
-    cy.origin(Cypress.env('KEYCLOAK_ISSUER'), { args: { login, password } }, ({ login, password }) => {
+    cy.origin(Cypress.expose('KEYCLOAK_ISSUER'), { args: { login, password } }, ({ login, password }) => {
         cy.get('#username').invoke('focus').type(login);
         cy.get('#password').invoke('focus').type(password, { log: false });
         cy.get('#kc-login').invoke('focus').click();
@@ -420,31 +430,31 @@ Cypress.Commands.add('keycloakUiLogout', () => {
 });
 
 Cypress.Commands.add('loginAs', (role: 'admin' | 'user') => {
-    const login = role === 'admin' ? Cypress.env('TEST_ADMIN_USER_LOGIN') : Cypress.env('TEST_USER_LOGIN');
-    const password = role === 'admin' ? Cypress.env('TEST_ADMIN_USER_PASSWORD') : Cypress.env('TEST_USER_PASSWORD');
+    const loginKey = role === 'admin' ? 'TEST_ADMIN_USER_LOGIN' : 'TEST_USER_LOGIN';
+    const passwordKey = role === 'admin' ? 'TEST_ADMIN_USER_PASSWORD' : 'TEST_USER_PASSWORD';
 
     cy.session(
         ['keycloak-session', role],
         () => {
-            cy.task('createKeycloakSession', {
-                username: login,
-                password,
-                keycloakIssuer: Cypress.env('KEYCLOAK_ISSUER'),
-                keycloakRealm: Cypress.env('KEYCLOAK_REALM'),
-                keycloakClientId: Cypress.env('KEYCLOAK_CLIENT_ID'),
-                nextAuthSecret: Cypress.env('NEXTAUTH_SECRET'),
-            }).then((cookies) => {
-                (cookies as { name: string; value: string }[]).forEach(({ name, value }) => {
-                    cy.setCookie(name, value, { httpOnly: true, sameSite: 'lax', path: '/' });
+            cy.env<Record<string, string>>([loginKey, passwordKey, 'NEXTAUTH_SECRET']).then((secrets) => {
+                cy.task('createKeycloakSession', {
+                    username: secrets[loginKey],
+                    password: secrets[passwordKey],
+                    keycloakIssuer: Cypress.expose('KEYCLOAK_ISSUER'),
+                    keycloakRealm: Cypress.expose('KEYCLOAK_REALM'),
+                    keycloakClientId: Cypress.expose('KEYCLOAK_CLIENT_ID'),
+                    nextAuthSecret: secrets.NEXTAUTH_SECRET,
+                }).then((cookies) => {
+                    (cookies as { name: string; value: string }[]).forEach(({ name, value }) => {
+                        cy.setCookie(name, value, { httpOnly: true, sameSite: 'lax', path: '/' });
+                    });
                 });
             });
         },
         {
             validate() {
                 cy.getCookies().should((cookies) => {
-                    expect(
-                        cookies.some((cookie) => cookie.name.startsWith('next-auth.session-token')),
-                    ).to.equal(true);
+                    expect(cookies.some((cookie) => cookie.name.startsWith('next-auth.session-token'))).to.equal(true);
                 });
             },
         },

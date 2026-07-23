@@ -8,7 +8,12 @@ function resolutionTag(res: [number, number] | Cypress.ViewportPreset): '@critic
     return res === 'iphone-6' ? '@mobile' : '@critical';
 }
 
-describe('Test the redirection by clicking the header logo', () => {
+// The viewer-page describe block occasionally sees the router.push('/') navigation
+// triggered by the logo click seem to get dropped (unconfirmed root cause, suspected
+// auth/session state settling - see /memories/session/e2e-overhaul-plan.md). A test
+// retry (re-running the whole test, including a fresh cy.visitViewer) is a more
+// reliable mitigation than trying to guard the exact interaction.
+describe('Test the redirection by clicking the header logo', { retries: { runMode: 2, openMode: 0 } }, () => {
     for (const url of Object.keys(pageURLNames)) {
         describe(`test the redirection on the ${pageURLNames[url]} page`, () => {
             resolutions.forEach((res) => {

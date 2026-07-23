@@ -33,7 +33,7 @@ yarn prisma:migrate
 yarn prisma:generate
 
 echo "Starting the Next.js dev server on the host..."
-yarn next dev >/tmp/mnestix-e2e-next-dev.log 2>&1 &
+NEXT_DISABLE_DEV_INDICATOR=true yarn next dev >/tmp/mnestix-e2e-next-dev.log 2>&1 &
 NEXT_PID=$!
 trap 'echo "Stopping the host Next.js dev server..."; kill "$NEXT_PID" 2>/dev/null || true' EXIT
 

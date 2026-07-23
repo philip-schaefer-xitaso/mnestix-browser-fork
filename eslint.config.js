@@ -79,12 +79,12 @@ export default tseslint.config(
                 'error',
                 {
                     selector:
-                        "CallExpression[callee.object.name=/^(describe|it|context)$/][callee.property.name=/^(only|skip)$/]",
+                        'CallExpression[callee.object.name=/^(describe|it|context)$/][callee.property.name=/^(only|skip)$/]',
                     message:
                         'Do not commit .only/.skip in cypress/e2e - use tags (see cypress.config.ts grepTags) to opt in/out of tests instead.',
                 },
                 {
-                    selector: "Identifier[name=/^(xit|xdescribe|xcontext)$/]",
+                    selector: 'Identifier[name=/^(xit|xdescribe|xcontext)$/]',
                     message:
                         'Do not commit xit/xdescribe in cypress/e2e - use tags (see cypress.config.ts grepTags) to opt in/out of tests instead.',
                 },

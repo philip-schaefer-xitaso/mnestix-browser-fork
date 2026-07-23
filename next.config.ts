@@ -6,6 +6,10 @@ const withNextIntl = createNextIntlPlugin();
 const nextConfig: NextConfig = {
     output: 'standalone', // Outputs a Single-Page Application (SPA).
     distDir: './dist', // Changes the build output directory to `./dist/`.
+    // The floating dev-mode indicator badge overlaps fixed-position UI (e.g. the mobile
+    // header drawer's bottom menu items) and breaks Cypress actionability checks. Only
+    // disable it for local E2E runs (see scripts/e2e-local.sh), never for normal `yarn dev`.
+    devIndicators: process.env.NEXT_DISABLE_DEV_INDICATOR === 'true' ? false : undefined,
     images: {
         remotePatterns: [
             {
