@@ -1078,6 +1078,15 @@
   resolved "https://registry.yarnpkg.com/@csstools/css-tokenizer/-/css-tokenizer-3.0.4.tgz#333fedabc3fd1a8e5d0100013731cf19e6a8c5d3"
   integrity sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==
 
+"@cypress/grep@^6.0.2":
+  version "6.0.2"
+  resolved "https://registry.yarnpkg.com/@cypress/grep/-/grep-6.0.2.tgz#5575a005201ef0f7d1d13efd4963afd561771b40"
+  integrity sha512-6L0TyUxGydOhuc+wOXGGyKpx2m5ViggKo06jHkyoCXY5jQC1wR+dM+JjstRPG3b8NLktVYGjcAKRPuvRBLHfRw==
+  dependencies:
+    debug "^4.3.4"
+    find-test-names "^1.28.18"
+    globby "^11.0.4"
+
 "@cypress/request@^4.0.0":
   version "4.0.1"
   resolved "https://registry.yarnpkg.com/@cypress/request/-/request-4.0.1.tgz#c3f0eec41834e7590d21cd740a4c6f7e0326368d"
@@ -5668,7 +5677,7 @@ find-root@^1.1.0:
   resolved "https://registry.yarnpkg.com/find-root/-/find-root-1.1.0.tgz#abcfc8ba76f708c42a97b3d685b7e9450bfb9ce4"
   integrity sha512-NKfW6bec6GfKc0SGx1e07QZY9PE99u0Bft/0rzSD5k3sO/vwkVUpDUKVm5Gpp5Ue3YfShPFTX2070tDs5kB9Ng==
 
-find-test-names@1.29.19:
+find-test-names@1.29.19, find-test-names@^1.28.18:
   version "1.29.19"
   resolved "https://registry.yarnpkg.com/find-test-names/-/find-test-names-1.29.19.tgz#365a18aefbc55f88ba5c96b01145c9b616b0d0d2"
   integrity sha512-fSO2GXgOU6dH+FdffmRXYN/kLdnd8zkBGIZrKsmAdfLSFUUDLpDFF7+F/h+wjmjDWQmMgD8hPfJZR+igiEUQHQ==
@@ -5983,7 +5992,7 @@ globalthis@^1.0.4:
     define-properties "^1.2.1"
     gopd "^1.0.1"
 
-globby@^11.1.0:
+globby@^11.0.4, globby@^11.1.0:
   version "11.1.0"
   resolved "https://registry.yarnpkg.com/globby/-/globby-11.1.0.tgz#bd4be98bb042f83d796f7e3811991fbe82a0d34b"
   integrity sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==

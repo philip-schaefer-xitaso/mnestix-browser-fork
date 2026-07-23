@@ -15,6 +15,7 @@
     "node": "^24.13.0"
   },
   "devDependencies": {
+    "@cypress/grep": "^6.0.2",
     "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.2.0",
     "@next/eslint-plugin-next": "^16.2.3",
@@ -96,6 +97,9 @@
     "typecheck:e2e": "tsc --noEmit -p cypress",
     "test": "cypress open",
     "test:headless": "cypress run",
+    "test:e2e:open": "sh scripts/e2e-local.sh open",
+    "test:e2e": "sh scripts/e2e-local.sh run",
+    "test:e2e:deps:down": "docker compose -f compose.yml -f docker-compose/compose.keycloak.yml down",
     "test:unit": "yarn prisma:generate && jest",
     "docker:basyx": "docker compose -f compose.yml -f docker-compose/compose.dev.yml --profile basyx up",
     "docker:dev": "docker compose -f compose.yml -f docker-compose/compose.dev.yml --profile basyx --profile backend --profile frontend up",
@@ -103,6 +107,7 @@
     "docker:backend": "docker compose -f compose.yml -f docker-compose/compose.dev.yml --profile basyx --profile backend up",
     "docker:prod": "docker compose up",
     "docker:test": "docker compose -f compose.yml -f docker-compose/compose.test.yml --profile tests up -d --build && docker compose -f compose.yml -f docker-compose/compose.test.yml attach cypress-test",
+    "docker:test:legacy": "docker compose -f compose.yml -f docker-compose/compose.test.yml --profile legacy-tests up -d --build && docker compose -f compose.yml -f docker-compose/compose.test.yml attach cypress-test-legacy",
     "docker:stop": "docker compose -f compose.yml -f docker-compose/compose.test.yml kill",
     "docker:down": "docker compose -f compose.yml -f docker-compose/compose.test.yml down",
     "docker:prune": "docker compose -f compose.yml  -f docker-compose/compose.test.yml -f docker-compose/compose.keycloak.yml down -v && docker network prune && docker network rm mnestix-network",

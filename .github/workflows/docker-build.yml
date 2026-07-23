@@ -73,10 +73,58 @@ jobs:
           path: mnestix-browser.tar
           key: docker-image-${{github.ref}}-${{ github.run_id }}
 
+  build-cypress-runner-image:
+    name: Build or reuse Cypress runner image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Compute image tag from Dockerfile + lockfile hash
+        id: tag
+        run: echo "tag=${{ hashFiles('cypress.dockerfile', 'yarn.lock') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if this exact runner image is already published
+        id: check
+        run: |
+          if docker manifest inspect "ghcr.io/${{ github.repository }}/cypress-runner:${{ steps.tag.outputs.tag }}" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and publish Cypress runner image
+        if: steps.check.outputs.exists == 'false'
+        uses: docker/build-push-action@v7
+        with:
+          context: "."
+          file: cypress.dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/cypress-runner:${{ steps.tag.outputs.tag }}
+            ghcr.io/${{ github.repository }}/cypress-runner:latest
+
   e2e-tests:
     name: e2e test matrix
     runs-on: ubuntu-latest
-    needs: ["build-browser-image"]
+    needs: ["build-browser-image", "build-cypress-runner-image"]
     permissions:
       contents: read
     strategy:
@@ -84,6 +132,8 @@ jobs:
       matrix:
         # add more containers to run more tests in parallel
         containers: [1, 2, 3, 4]
+    env:
+      CYPRESS_RUNNER_TAG: ${{ needs.build-cypress-runner-image.outputs.tag }}
 
     steps:
       - name: Checkout repository
@@ -94,10 +144,6 @@ jobs:
         with:
           path: mnestix-browser.tar
           key: docker-image-${{github.ref}}-${{ github.run_id }}
-
-      # image too big to be reused
-      - name: Build test image
-        run: docker compose -f compose.yml -f docker-compose/compose.test.yml --profile tests build cypress-test
 
       - name: Pull images
         run: docker compose -f compose.yml -f docker-compose/compose.test.yml --profile tests pull
@@ -126,10 +172,104 @@ jobs:
           TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
 
       - name: E2E test collect artifact
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: cypress-artifacts-${{ matrix.containers }}
+          path: cypress-artifacts/
+
+  mobile-smoke:
+    name: Mobile smoke tests
+    runs-on: ubuntu-latest
+    needs: ["build-browser-image", "build-cypress-runner-image"]
+    permissions:
+      contents: read
+    env:
+      CYPRESS_RUNNER_TAG: ${{ needs.build-cypress-runner-image.outputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Restore image
+        uses: actions/cache/restore@v6
+        with:
+          path: mnestix-browser.tar
+          key: docker-image-${{github.ref}}-${{ github.run_id }}
+
+      - name: Pull images
+        run: docker compose -f compose.yml -f docker-compose/compose.test.yml --profile tests pull
+
+      - name: Remove Docker image mnestix/mnestix-browser:latest, to avoid conflicts
+        run: docker rmi mnestix/mnestix-browser:latest
+
+      - name: Load mnestix-browser image
+        run: docker load -i mnestix-browser.tar
+
+      - name: Run mobile-tagged e2e tests
+        timeout-minutes: 18
+        run: |
+          docker compose -f compose.yml -f docker-compose/compose.test.yml --profile tests up -d &&
+          docker compose -f compose.yml -f docker-compose/compose.test.yml attach cypress-test
+        env:
+          CYPRESS_grepTags: "@mobile"
+          TEST_ADMIN_USER_PASSWORD: ${{ secrets.TEST_ADMIN_USER_PASSWORD }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+
+      - name: Mobile smoke collect artifact
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cypress-artifacts-mobile-smoke
+          path: cypress-artifacts/
+
+  # Runs the frozen pre-overhaul suite side by side with the new suite so the two can
+  # be compared while confidence is being built in the new suite. Intentionally
+  # non-blocking (continue-on-error) - remove this job once the new suite has fully
+  # replaced cypress/legacy.
+  e2e-tests-legacy:
+    name: e2e test matrix (legacy, non-blocking)
+    runs-on: ubuntu-latest
+    needs: ["build-browser-image", "build-cypress-runner-image"]
+    permissions:
+      contents: read
+    continue-on-error: true
+    env:
+      CYPRESS_RUNNER_TAG: ${{ needs.build-cypress-runner-image.outputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Restore image
+        uses: actions/cache/restore@v6
+        with:
+          path: mnestix-browser.tar
+          key: docker-image-${{github.ref}}-${{ github.run_id }}
+
+      - name: Pull images
+        run: docker compose -f compose.yml -f docker-compose/compose.test.yml --profile legacy-tests pull
+
+      - name: Remove Docker image mnestix/mnestix-browser:latest, to avoid conflicts
+        run: docker rmi mnestix/mnestix-browser:latest
+
+      - name: Load mnestix-browser image
+        run: docker load -i mnestix-browser.tar
+
+      - name: Run legacy e2e tests
+        timeout-minutes: 30
+        run: |
+          docker compose -f compose.yml -f docker-compose/compose.test.yml --profile legacy-tests up -d &&
+          docker compose -f compose.yml -f docker-compose/compose.test.yml attach cypress-test-legacy
+        env:
+          TEST_ADMIN_USER_PASSWORD: ${{ secrets.TEST_ADMIN_USER_PASSWORD }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+
+      - name: Legacy e2e test collect artifact
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cypress-artifacts-legacy
           path: cypress-artifacts/
 
   unit-test:

@@ -4,8 +4,6 @@ import testDropdownSubRef from '../fixtures/cypress_e2e/Submodels/cyDropdown_Sub
 import testBom from '../fixtures/cypress_e2e/Submodels/cyBillOfMaterial.json';
 import testBomSubRef from '../fixtures/cypress_e2e/Submodels/cyBillOfMaterial_SubmodelReference.json';
 import AASBomComponent from '../fixtures/cypress_e2e/cyTestAas_BoM_Component.json';
-import compareAAS from '../fixtures/cypress_e2e/CompareMockData/cy_compareAas.json';
-import compareSubmodels from '../fixtures/cypress_e2e/CompareMockData/cy_compareNameplateSubmodel.json';
 import qrAAS from '../fixtures/cypress_e2e/QrScannerMockData/cy_qrScannerAas.json';
 import qrSubmodels from '../fixtures/cypress_e2e/QrScannerMockData/cy_qrScannerNameplateSubmodel.json';
 import listAasMockData from '../fixtures/cypress_e2e/AasListMockData/cyListAasMockData.json';
@@ -194,26 +192,6 @@ Cypress.Commands.add('postSubmodel', (submodelBody) => {
     attempt(1);
 });
 
-Cypress.Commands.add('postCompareMockData', () => {
-    compareAAS.forEach((aas) => {
-        cy.postShell(aas);
-    });
-    compareSubmodels.forEach((submodel) => {
-        cy.postSubmodel(submodel);
-    });
-});
-
-Cypress.Commands.add('deleteCompareMockData', () => {
-    compareAAS.forEach((aas) => {
-        const encodedAasId = btoa(aas.id);
-        cy.repoRequest('DELETE', '/shells/' + encodedAasId, null);
-    });
-    compareSubmodels.forEach((submodel) => {
-        const encodedSubmodelId = btoa(submodel.id);
-        cy.repoRequest('DELETE', '/submodels/' + encodedSubmodelId, null);
-    });
-});
-
 Cypress.Commands.add('postQrScannerMockData', () => {
     qrAAS.forEach((aas) => {
         cy.postShell(aas);
@@ -292,6 +270,27 @@ Cypress.Commands.add('isNotificationSent', (msg: string) => {
     cy.get('.MuiAlert-message').should('contain.text', msg);
 });
 
+// NotificationOutlet.tsx renders `<Alert variant="filled" severity=.../>`, so MUI
+// generates a severity-specific class (MuiAlert-filledError / -filledSuccess / ...).
+// Asserting on that class - instead of the generic `.MuiAlert-root` the previous
+// suite used - fails fast and correctly on the wrong notification type, e.g. an
+// error banner shown where a save was expected to succeed.
+Cypress.Commands.add('expectSuccessNotification', (message?: string) => {
+    if (message) {
+        cy.get('.MuiAlert-filledSuccess', { timeout: 10000 }).should('contain.text', message);
+    } else {
+        cy.get('.MuiAlert-filledSuccess', { timeout: 10000 }).should('be.visible');
+    }
+});
+
+Cypress.Commands.add('expectErrorNotification', (message?: string) => {
+    if (message) {
+        cy.get('.MuiAlert-filledError', { timeout: 10000 }).should('contain.text', message);
+    } else {
+        cy.get('.MuiAlert-filledError', { timeout: 10000 }).should('be.visible');
+    }
+});
+
 Cypress.Commands.add('postTestThumbnailAas', () => {
     cy.postShell(thumbnailAasMockData);
 });
@@ -329,7 +328,72 @@ Cypress.Commands.add('deleteThumbnailFromAas', (aasId: string) => {
     cy.repoRequest('DELETE', '/shells/' + encodedAasId + '/asset-information/thumbnail', null);
 });
 
-Cypress.Commands.add('keycloakLogin', (login: string, password: string) => {
+// --- Authentication -------------------------------------------------------
+//
+// Two authentication paths are intentionally kept separate:
+//
+// 1. `loginAs`: programmatic session creation. A Cypress Node task
+//    authenticates directly against Keycloak's token endpoint (the demo
+//    client is public with direct access grants enabled) and mints a real
+//    NextAuth session cookie with the exact algorithm NextAuth itself uses
+//    (see cypress/support/tasks.ts). This is what almost every authenticated
+//    scenario should use: it is fast, and it sidesteps the cross-site cookie
+//    handling that made the real OAuth redirect unreliable inside Cypress's
+//    iframe (see /memories/repo/cypress-flakes.md for the root cause).
+// 2. `keycloakUiLogin` / `keycloakUiLogout`: drives the real login/logout
+//    button and Keycloak's hosted login form through `cy.origin`. Reserved
+//    for the login/logout contract spec (authContract.spec.ts), the only
+//    place that needs to prove the actual browser flow works end to end.
+
+let relayedStateCookies: Record<string, { value: string }> = {};
+let relayedSessionCookieChunks: Record<string, string> = {};
+
+Cypress.Commands.add('setupKeycloakStateCookieRelay', () => {
+    relayedStateCookies = {};
+    relayedSessionCookieChunks = {};
+
+    cy.intercept('POST', '**/api/auth/signin/keycloak*', (req) => {
+        req.continue((res) => {
+            captureSetCookies(res.headers['set-cookie'], ['next-auth.state', 'next-auth.pkce.code_verifier']).forEach(
+                (cookie) => {
+                    relayedStateCookies[cookie.name] = { value: cookie.value };
+                },
+            );
+        });
+    }).as('keycloakSignIn');
+
+    cy.intercept('GET', '**/api/auth/callback/keycloak*', (req) => {
+        const cookieHeader = Object.entries(relayedStateCookies)
+            .map(([name, { value }]) => `${name}=${value}`)
+            .join('; ');
+        if (cookieHeader) {
+            req.headers['cookie'] = req.headers['cookie']
+                ? `${req.headers['cookie']}; ${cookieHeader}`
+                : cookieHeader;
+        }
+        req.continue((res) => {
+            captureSetCookies(res.headers['set-cookie'], ['next-auth.session-token']).forEach((cookie) => {
+                relayedSessionCookieChunks[cookie.name] = cookie.value;
+            });
+        });
+    }).as('keycloakCallback');
+});
+
+function captureSetCookies(
+    setCookieHeader: string | string[] | undefined,
+    namePrefixes: string[],
+): { name: string; value: string }[] {
+    const headers = !setCookieHeader ? [] : Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
+    return headers
+        .map((header) => {
+            const [nameValue] = header.split(';');
+            const separatorIndex = nameValue.indexOf('=');
+            return { name: nameValue.slice(0, separatorIndex), value: nameValue.slice(separatorIndex + 1) };
+        })
+        .filter((cookie) => namePrefixes.some((prefix) => cookie.name.startsWith(prefix)));
+}
+
+Cypress.Commands.add('keycloakUiLogin', (login: string, password: string) => {
     cy.getByTestId('header-burgermenu').click();
     cy.getByTestId('login-button').click();
     cy.origin(Cypress.env('KEYCLOAK_ISSUER'), { args: { login, password } }, ({ login, password }) => {
@@ -337,9 +401,53 @@ Cypress.Commands.add('keycloakLogin', (login: string, password: string) => {
         cy.get('#password').invoke('focus').type(password, { log: false });
         cy.get('#kc-login').invoke('focus').click();
     });
-    cy.get('button').click();
+    cy.then(() => {
+        // Cypress does not persist the Set-Cookie from the cross-site callback
+        // redirect, so the relayed chunks captured by setupKeycloakStateCookieRelay
+        // must be applied explicitly.
+        Object.entries(relayedSessionCookieChunks).forEach(([name, value]) => {
+            cy.setCookie(name, value, { httpOnly: true, sameSite: 'lax', path: '/' });
+        });
+    });
+    cy.reload();
+    cy.getCookies().should((cookies) => {
+        expect(cookies.some((cookie) => cookie.name.startsWith('next-auth.session-token'))).to.equal(true);
+    });
 });
 
-Cypress.Commands.add('keycloakLogout', () => {
+Cypress.Commands.add('keycloakUiLogout', () => {
     cy.getByTestId('logout-button').click();
+});
+
+Cypress.Commands.add('loginAs', (role: 'admin' | 'user') => {
+    const login = role === 'admin' ? Cypress.env('TEST_ADMIN_USER_LOGIN') : Cypress.env('TEST_USER_LOGIN');
+    const password = role === 'admin' ? Cypress.env('TEST_ADMIN_USER_PASSWORD') : Cypress.env('TEST_USER_PASSWORD');
+
+    cy.session(
+        ['keycloak-session', role],
+        () => {
+            cy.task('createKeycloakSession', {
+                username: login,
+                password,
+                keycloakIssuer: Cypress.env('KEYCLOAK_ISSUER'),
+                keycloakRealm: Cypress.env('KEYCLOAK_REALM'),
+                keycloakClientId: Cypress.env('KEYCLOAK_CLIENT_ID'),
+                nextAuthSecret: Cypress.env('NEXTAUTH_SECRET'),
+            }).then((cookies) => {
+                (cookies as { name: string; value: string }[]).forEach(({ name, value }) => {
+                    cy.setCookie(name, value, { httpOnly: true, sameSite: 'lax', path: '/' });
+                });
+            });
+        },
+        {
+            validate() {
+                cy.getCookies().should((cookies) => {
+                    expect(
+                        cookies.some((cookie) => cookie.name.startsWith('next-auth.session-token')),
+                    ).to.equal(true);
+                });
+            },
+        },
+    );
+    cy.visit('/');
 });

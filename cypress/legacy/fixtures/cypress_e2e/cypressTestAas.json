@@ -1,0 +1,15 @@
+﻿{
+    "id": "https://mnestix.io/aas/cypressTest",
+    "idShort": "aas_cypressTest",
+    "modelType": "AssetAdministrationShell",
+    "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "https://mnestix.io/cypressTest",
+        "specificAssetIds": [
+            {
+                "name": "assetIdShort",
+                "value": "cypressTest"
+            }
+        ]
+    }
+}

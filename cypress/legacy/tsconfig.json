@@ -1,0 +1,15 @@
+﻿{
+  "compilerOptions": {
+    "module": "preserve",
+    "target": "es2017",
+    "jsx": "react",
+    "allowJs": true,
+    "types": ["cypress", "node"],
+    "moduleResolution": "bundler",
+    "noImplicitAny": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["**/*.ts"]
+}

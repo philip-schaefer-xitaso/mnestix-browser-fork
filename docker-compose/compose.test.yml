@@ -2,6 +2,10 @@ services:
   cypress-test:
     container_name: cypress-test
     profiles: ['', 'tests']
+    # `image` lets CI pull a pre-built, publicly published runner instead of rebuilding
+    # per shard (see build-cypress-runner-image in docker-build.yml); `build` is kept so
+    # local `docker compose ... build` / `up --build` still works without GHCR access.
+    image: ghcr.io/eclipse-mnestix/mnestix-browser/cypress-runner:${CYPRESS_RUNNER_TAG:-local}
     build:
       dockerfile: cypress.dockerfile
     environment:
@@ -10,6 +14,14 @@ services:
       CYPRESS_SUBMODEL_REPO_API_URL: 'http://mnestix-proxy:5065/repo'
       CYPRESS_MNESTIX_AAS_GENERATOR_API_URL: 'http://mnestix-proxy:5065'
       CYPRESS_AAS_DISCOVERY_API_URL: 'http://mnestix-proxy:5065/discovery'
+      # cypress.config.ts defaults to localhost for host-run dev usage; inside this
+      # container network the in-network hostnames/secret used by the mnestix-browser
+      # service below must be used instead so createKeycloakSession() mints a session
+      # that mnestix-browser can actually decrypt.
+      CYPRESS_KEYCLOAK_ISSUER: 'http://keycloak:8080'
+      CYPRESS_KEYCLOAK_REALM: 'Mnestix'
+      CYPRESS_KEYCLOAK_CLIENT_ID: 'mnestix-browser-client-demo'
+      CYPRESS_NEXTAUTH_SECRET: 'test'
       MNESTIX_API_KEY: 'verySecureApiKey'
       ELECTRON_ENABLE_LOGGING: 1
       SPLIT: ${SPLIT:-1}
@@ -31,6 +43,44 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy # keycloak needs to be healthy before tests
+    networks:
+      - mnestix-network
+
+  # Runs the frozen pre-overhaul suite (cypress/legacy) against the exact same stack
+  # as cypress-test, purely so the two can be compared side by side while the new
+  # suite is being trusted. Not part of the 'tests' profile's pass/fail gate - start
+  # it explicitly (`--profile legacy-tests`) when a comparison run is wanted, and
+  # remove this service once the new suite has fully replaced it.
+  cypress-test-legacy:
+    container_name: cypress-test-legacy
+    profiles: ['legacy-tests']
+    image: ghcr.io/eclipse-mnestix/mnestix-browser/cypress-runner:${CYPRESS_RUNNER_TAG:-local}
+    build:
+      dockerfile: cypress.dockerfile
+    environment:
+      CYPRESS_BASE_URL: 'http://mnestix-browser:3000'
+      CYPRESS_AAS_REPO_API_URL: 'http://mnestix-proxy:5065/repo'
+      CYPRESS_SUBMODEL_REPO_API_URL: 'http://mnestix-proxy:5065/repo'
+      CYPRESS_MNESTIX_AAS_GENERATOR_API_URL: 'http://mnestix-proxy:5065'
+      CYPRESS_AAS_DISCOVERY_API_URL: 'http://mnestix-proxy:5065/discovery'
+      MNESTIX_API_KEY: 'verySecureApiKey'
+      ELECTRON_ENABLE_LOGGING: 1
+    command: ['run', '--config-file', 'cypress.legacy.config.ts']
+    volumes:
+      - ./cypress/:/cypress_Tests/cypress
+      - ./cypress.legacy.config.ts:/cypress_Tests/cypress.legacy.config.ts
+      - ./cypress-artifacts/screenshots:/cypress_Tests/cypress/screenshots
+      - ./cypress-artifacts/videos:/cypress_Tests/cypress/videos
+      - ./tsconfig.json:/cypress_Tests/tsconfig.json
+    depends_on:
+      mnestix-browser:
+        condition: service_started
+      mnestix-aas-generator:
+        condition: service_started
+      aas-environment:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
     networks:
       - mnestix-network
 

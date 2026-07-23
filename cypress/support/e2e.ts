@@ -1,5 +1,8 @@
 // Import commands.js
 import './commands';
+import { register as registerCypressGrep } from '@cypress/grep';
+
+registerCypressGrep();
 
 declare global {
     // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -118,16 +121,6 @@ declare global {
             /**
              * @description Posts compare mock data into the repository
              */
-            postCompareMockData(): Chainable;
-
-            /**
-             * @description Deletes compare mock data into the repository
-             */
-            deleteCompareMockData(): Chainable;
-
-            /**
-             * @description Posts compare mock data into the repository
-             */
             postQrScannerMockData(): Chainable;
 
             /**
@@ -149,6 +142,19 @@ declare global {
              */
             isNotificationSent(msg: string): Chainable;
 
+            /**
+             * @description Asserts a filled MUI success Alert (severity="success") is
+             * visible, optionally containing the given text. Fails fast (10s) instead
+             * of the default success/error ambiguity of asserting on `.MuiAlert-root`.
+             */
+            expectSuccessNotification(message?: string): Chainable;
+
+            /**
+             * @description Asserts a filled MUI error Alert (severity="error") is
+             * visible, optionally containing the given text.
+             */
+            expectErrorNotification(message?: string): Chainable;
+
             postTestThumbnailAas(): Chainable;
 
             deleteTestThumbnailAas(): Chainable;
@@ -157,9 +163,28 @@ declare global {
 
             deleteThumbnailFromAas(aasId: string): Chainable;
 
-            keycloakLogin(login: string, password: string): Chainable;
+            /**
+             * @description Registers the intercepts that relay the NextAuth/Keycloak
+             * state cookie and session cookie across the cross-site OAuth redirect,
+             * which Cypress otherwise drops. Call once before `keycloakUiLogin`.
+             */
+            setupKeycloakStateCookieRelay(): Chainable;
 
-            keycloakLogout(): Chainable;
+            /**
+             * @description Drives the real login button + Keycloak hosted login form
+             * through `cy.origin`. Reserved for the login/logout contract spec; other
+             * authenticated scenarios should use `loginAs` instead.
+             */
+            keycloakUiLogin(login: string, password: string): Chainable;
+
+            keycloakUiLogout(): Chainable;
+
+            /**
+             * @description Establishes an authenticated session for the given role
+             * programmatically (no browser OAuth redirect) and caches it for the
+             * spec file via `cy.session`. Visits `/` afterwards.
+             */
+            loginAs(role: 'admin' | 'user'): Chainable;
         }
     }
 }

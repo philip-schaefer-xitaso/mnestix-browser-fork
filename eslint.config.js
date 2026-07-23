@@ -67,4 +67,28 @@ export default tseslint.config(
         },
     },
     cypress.configs.recommended,
+    // The living e2e suite must never accidentally ship a debugging-only .only/.skip
+    // (which would silently disable the rest of the suite in CI) or an ignored
+    // xit/xdescribe (our replacement for the old "ignoredTestFiles" folder convention -
+    // tests should be tagged and grep-excluded instead, see cypress.config.ts grepTags).
+    // cypress/legacy is a frozen historical snapshot and is intentionally exempt.
+    {
+        files: ['cypress/e2e/**/*.ts'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector:
+                        "CallExpression[callee.object.name=/^(describe|it|context)$/][callee.property.name=/^(only|skip)$/]",
+                    message:
+                        'Do not commit .only/.skip in cypress/e2e - use tags (see cypress.config.ts grepTags) to opt in/out of tests instead.',
+                },
+                {
+                    selector: "Identifier[name=/^(xit|xdescribe|xcontext)$/]",
+                    message:
+                        'Do not commit xit/xdescribe in cypress/e2e - use tags (see cypress.config.ts grepTags) to opt in/out of tests instead.',
+                },
+            ],
+        },
+    },
 );
